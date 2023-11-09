@@ -31,6 +31,8 @@ class MapTouchWrapper : FrameLayout {
   private var touchSlop = 0
   private var down: Point? = null
   private var listener: ((Point) -> Unit)? = null
+  private var listenerLong: (() -> Unit)? = null
+  private var downTime: Long = 0
 
   constructor(context: Context) : super(context) {
     setup(context)
@@ -45,8 +47,9 @@ class MapTouchWrapper : FrameLayout {
     touchSlop = vc.scaledTouchSlop
   }
 
-  fun setup(listener: ((Point) -> Unit)?) {
+  fun setup(listener: ((Point) -> Unit)?,listenerLong: (() -> Unit)?) {
     this.listener = listener
+    this.listenerLong = listenerLong
   }
 
   private fun distance(p1: Point, p2: Point): Double {
@@ -54,6 +57,8 @@ class MapTouchWrapper : FrameLayout {
     val yDiff = (p1.y - p2.y).toDouble()
     return sqrt(xDiff * xDiff + yDiff * yDiff)
   }
+
+
 
   override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
     if (listener == null) {
@@ -63,9 +68,16 @@ class MapTouchWrapper : FrameLayout {
     val y = event.y.toInt()
     val tapped = Point(x, y)
     when (event.action) {
-      MotionEvent.ACTION_DOWN -> down = tapped
-      MotionEvent.ACTION_MOVE -> if (down != null && distance(down!!, tapped) >= touchSlop) {
-        down = null
+      MotionEvent.ACTION_DOWN -> {
+        down = tapped
+        downTime = event.eventTime
+      }
+      MotionEvent.ACTION_MOVE -> {
+        if (down != null && distance(down!!, tapped) >= touchSlop) down = null
+        if (event.eventTime - downTime > 1500) {
+          listenerLong?.invoke()
+          return true
+        }
       }
       MotionEvent.ACTION_UP -> if (down != null && distance(down!!, tapped) < touchSlop) {
         listener?.invoke(tapped)

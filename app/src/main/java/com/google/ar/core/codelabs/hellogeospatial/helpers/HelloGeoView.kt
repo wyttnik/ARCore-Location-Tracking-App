@@ -40,11 +40,11 @@ class HelloGeoView(val activity: HelloGeoActivity) : DefaultLifecycleObserver {
 
   var mapView: MapView? = null
   val mapTouchWrapper = root.findViewById<MapTouchWrapper>(R.id.map_wrapper).apply {
-    setup { screenLocation ->
+    setup({ screenLocation ->
       val latLng: LatLng =
         mapView?.googleMap?.projection?.fromScreenLocation(screenLocation) ?: return@setup
       activity.renderer.onMapClick(latLng)
-    }
+    }, {activity.renderer.onLongMapClick()})
   }
   val mapFragment =
     (activity.supportFragmentManager.findFragmentById(R.id.map)!! as SupportMapFragment).also {

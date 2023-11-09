@@ -49,6 +49,7 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
   lateinit var virtualSceneFramebuffer: Framebuffer
   var hasSetTextureNames = false
   var earthLoc = LatLng(0.0, 0.0)
+  var cameraPos = LatLng(0.0, 0.0)
 
   // Virtual object (ARCore pawn)
   lateinit var virtualObjectMesh: Mesh
@@ -187,8 +188,8 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
         longitude = cameraGeospatialPose.longitude,
         heading = cameraGeospatialPose.heading
       )
-      var dist = SphericalUtil.computeDistanceBetween(earthLoc, LatLng(cameraGeospatialPose.latitude,
-        cameraGeospatialPose.longitude))
+      cameraPos = LatLng(cameraGeospatialPose.latitude, cameraGeospatialPose.longitude)
+      val dist = SphericalUtil.computeDistanceBetween(earthLoc, cameraPos)
       toDraw = dist <= 15
       activity.view.updateStatusText(earth, cameraGeospatialPose)
     }
@@ -203,6 +204,10 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
   }
 
   var earthAnchor: Anchor? = null
+
+  fun onLongMapClick(){
+    onMapClick(cameraPos)
+  }
 
   fun onMapClick(latLng: LatLng) {
     earthLoc = latLng
