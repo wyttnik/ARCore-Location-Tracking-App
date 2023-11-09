@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
 
 android {
     compileSdkVersion 30
@@ -47,4 +48,5 @@ dependencies {
     implementation 'com.google.android.gms:play-services-location:19+'
     implementation 'com.google.android.gms:play-services-maps:18.0.2'
     implementation 'com.google.maps.android:android-maps-utils:3.7.0'
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
 }

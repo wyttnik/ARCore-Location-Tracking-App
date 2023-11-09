@@ -15,6 +15,7 @@
  */
 package com.google.ar.core.codelabs.hellogeospatial
 
+import android.content.Context
 import android.opengl.Matrix
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -22,6 +23,8 @@ import androidx.lifecycle.LifecycleOwner
 import com.google.android.gms.maps.model.LatLng
 import com.google.ar.core.Anchor
 import com.google.ar.core.TrackingState
+import com.google.ar.core.codelabs.hellogeospatial.helpers.JsonAnchor
+import com.google.ar.core.dependencies.i
 import com.google.ar.core.examples.java.common.helpers.DisplayRotationHelper
 import com.google.ar.core.examples.java.common.helpers.TrackingStateHelper
 import com.google.ar.core.examples.java.common.samplerender.Framebuffer
@@ -32,7 +35,10 @@ import com.google.ar.core.examples.java.common.samplerender.Texture
 import com.google.ar.core.examples.java.common.samplerender.arcore.BackgroundRenderer
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.maps.android.SphericalUtil
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import java.io.IOException
+import kotlinx.serialization.encodeToString
 
 
 class HelloGeoRenderer(val activity: HelloGeoActivity) :
@@ -48,8 +54,11 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
   lateinit var backgroundRenderer: BackgroundRenderer
   lateinit var virtualSceneFramebuffer: Framebuffer
   var hasSetTextureNames = false
-  var earthLoc = LatLng(0.0, 0.0)
-  var cameraPos = LatLng(0.0, 0.0)
+  var cameraPos:LatLng? = null
+  var curId = 0
+  val anchorDists = booleanArrayOf(false,false,false)
+  val sharedPreference =  activity.getPreferences(Context.MODE_PRIVATE)
+  var launchFlag = true
 
   // Virtual object (ARCore pawn)
   lateinit var virtualObjectMesh: Mesh
@@ -69,6 +78,22 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
 
   val displayRotationHelper = DisplayRotationHelper(activity)
   val trackingStateHelper = TrackingStateHelper(activity)
+
+  fun checkSavedAnchors() {
+    activity.runOnUiThread {
+      for (i in 0..2) {
+        val stringJson = sharedPreference.getString(i.toString(),null)
+        if (stringJson != null) {
+          val jsonAnchor = Json.decodeFromString<JsonAnchor>(stringJson)
+          onMapClick(LatLng(jsonAnchor.lat,jsonAnchor.lon), jsonAnchor)
+        }
+        else {
+          ++curId
+          if (curId == 3) curId = 0
+        }
+      }
+    }
+  }
 
   override fun onResume(owner: LifecycleOwner) {
     displayRotationHelper.onResume()
@@ -179,7 +204,6 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
     //</editor-fold>
 
     val earth = session.earth
-    var toDraw = true
 
     if (earth?.trackingState == TrackingState.TRACKING) {
       val cameraGeospatialPose = earth.cameraGeospatialPose
@@ -189,48 +213,99 @@ class HelloGeoRenderer(val activity: HelloGeoActivity) :
         heading = cameraGeospatialPose.heading
       )
       cameraPos = LatLng(cameraGeospatialPose.latitude, cameraGeospatialPose.longitude)
-      val dist = SphericalUtil.computeDistanceBetween(earthLoc, cameraPos)
-      toDraw = dist <= 15
+      for (i in 0..2) {
+        val stringJson = sharedPreference.getString(i.toString(),null)
+        if (stringJson != null) {
+          val jsonAnchor = Json.decodeFromString<JsonAnchor>(stringJson)
+          val dist = SphericalUtil.computeDistanceBetween(LatLng(jsonAnchor.lat, jsonAnchor.lon), cameraPos)
+          anchorDists[i] = dist <= 15
+        }
+      }
+
       activity.view.updateStatusText(earth, cameraGeospatialPose)
+    }
+    if (launchFlag && cameraPos != null) {
+      checkSavedAnchors()
+      launchFlag = false
     }
 
     // Draw the placed anchor, if it exists.
-    earthAnchor?.let {
-      if (toDraw) render.renderCompassAtAnchor(it)
+    for (i in 0..2) {
+      earthAnchorArray[i]?.let {
+        if (anchorDists[i]) render.renderCompassAtAnchor(it)
+      }
     }
 
     // Compose the virtual scene with the background.
     backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, Z_NEAR, Z_FAR)
   }
 
-  var earthAnchor: Anchor? = null
+  val earthAnchorArray: Array<Anchor?> = arrayOfNulls(3)
 
   fun onLongMapClick(){
-    onMapClick(cameraPos)
+    onMapClick(cameraPos!!)
   }
 
-  fun onMapClick(latLng: LatLng) {
-    earthLoc = latLng
+  fun onMapClick(latLng: LatLng, jsonAnchor: JsonAnchor? = null) {
     val earth = session?.earth ?: return
     if (earth.trackingState != TrackingState.TRACKING) {
       return
     }
-    earthAnchor?.detach()
+    earthAnchorArray[curId]?.detach()
 
-    // Place the earth anchor at the same altitude as that of the camera to make it easier to view.
-    val cameraGeospatialPose = earth.cameraGeospatialPose
-    val altitude = cameraGeospatialPose.altitude - 1
+    val altitude: Double
     // The rotation quaternion of the anchor in EUS coordinates.
-    val qx = 0f
-    val qy = 0f
-    val qz = 0f
-    val qw = 1f
-    earthAnchor = earth.createAnchor(latLng.latitude, latLng.longitude, altitude, qx, qy, qz, qw)
-
-    activity.view.mapView?.earthMarker?.apply {
-      position = latLng
-      isVisible = true
+    val qx:Float
+    val qy:Float
+    val qz:Float
+    val qw: Float
+    if (jsonAnchor == null) {
+      val cameraGeospatialPose = earth.cameraGeospatialPose
+      altitude = cameraGeospatialPose.altitude - 1
+      // The rotation quaternion of the anchor in EUS coordinates.
+      qx = 0f
+      qy = 0f
+      qz = 0f
+      qw = 1f
+      earthAnchorArray[curId] = earth.createAnchor(latLng.latitude, latLng.longitude, altitude, qx, qy, qz, qw)
+      with (sharedPreference.edit()) {
+        putString(curId.toString(),Json.encodeToString(JsonAnchor(latLng.latitude, latLng.longitude, altitude, qx, qy, qz, qw)))
+        apply()
+      }
     }
+    else {
+      altitude = jsonAnchor.alt
+      // The rotation quaternion of the anchor in EUS coordinates.
+      qx = jsonAnchor.qx
+      qy = jsonAnchor.qy
+      qz = jsonAnchor.qz
+      qw = jsonAnchor.qw
+      earthAnchorArray[curId] = earth.createAnchor(latLng.latitude, latLng.longitude, altitude, qx, qy, qz, qw)
+    }
+
+    when(curId) {
+      0 -> {
+        activity.view.mapView?.earthMarker0?.apply {
+          position = latLng
+          isVisible = true
+        }
+      }
+      1 -> {
+        activity.view.mapView?.earthMarker1?.apply {
+          position = latLng
+          isVisible = true
+        }
+      }
+      2 -> {
+        activity.view.mapView?.earthMarker2?.apply {
+          position = latLng
+          isVisible = true
+        }
+      }
+    }
+
+    ++curId
+    if (curId == 3) curId = 0
   }
 
   private fun SampleRender.renderCompassAtAnchor(anchor: Anchor) {

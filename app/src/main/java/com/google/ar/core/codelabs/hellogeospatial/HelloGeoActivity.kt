@@ -15,6 +15,8 @@
  */
 package com.google.ar.core.codelabs.hellogeospatial
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -107,6 +109,15 @@ class HelloGeoActivity : AppCompatActivity() {
       finish()
     }
   }
+
+//  override fun onDestroy() {
+//    super.onDestroy()
+//
+//    with (getPreferences(Context.MODE_PRIVATE).edit()){
+//      clear()
+//      commit()
+//    }
+//  }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)
